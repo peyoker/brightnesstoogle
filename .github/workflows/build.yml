@@ -1,0 +1,44 @@
+# Nombre del flujo de trabajo que aparecerá en la pestaña "Actions" de GitHub
+name: Compilación de .NET
+
+# Define cuándo se ejecutará este flujo de trabajo
+on:
+  push:
+    branches: [ "main" ] # Se ejecuta cada vez que haces push a la rama 'main'
+  pull_request:
+    branches: [ "main" ] # También en pull requests a 'main'
+
+jobs:
+  build:
+    # La máquina virtual en la que se ejecutará. Como es una app de Windows, usamos Windows.
+    runs-on: windows-latest
+
+    steps:
+    # 1. Obtiene el código de tu repositorio
+    - name: Checkout del código
+      uses: actions/checkout@v4
+
+    # 2. Configura el SDK de .NET 9.x
+    # Esto se encarga de instalar la versión correcta de .NET en la máquina virtual.
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x' # Usará la última preview disponible de .NET 9
+
+    # 3. Restaura las dependencias de NuGet (como Microsoft.Windows.Compatibility)
+    # En este entorno limpio, esto funcionará sin problemas.
+    - name: Restaurar dependencias
+      run: dotnet restore
+
+    # 4. Compila el proyecto en modo Release
+    # Igual que tu comando local, pero sin problemas de bloqueo de archivos.
+    - name: Compilar el proyecto
+      run: dotnet build --configuration Release --no-restore
+
+    # 5. Sube los archivos compilados como un "artefacto"
+    # Esto crea un paquete .zip que puedes descargar.
+    - name: Subir artefacto de compilación
+      uses: actions/upload-artifact@v4
+      with:
+        name: BrightnessToggle-Release # Nombre del archivo .zip descargable
+        path: bin/Release/net9.0-windows/ # Ruta a los archivos que se deben empaquetar
