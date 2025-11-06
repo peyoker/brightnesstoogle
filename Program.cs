@@ -109,7 +109,7 @@ namespace NoBright
             "ADVERTENCIA: No se puede controlar el brillo en este equipo"
         };
 
-        private string[] currentTexts;
+        public string[] currentTexts;
 
         public ConfigForm()
         {
