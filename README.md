@@ -49,6 +49,7 @@ No other interaction needed.
 
 ## 📄 Roadmap / TODO
 
+* Change name
 * Versions
 * Languajes
 * Only one instance
