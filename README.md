@@ -1,14 +1,17 @@
+<p align="center">
+<img width="256" height="256" alt="NoBright" src="https://github.com/user-attachments/assets/0b71ad01-1144-4638-aa66-e0cd9a0d85f5" />
+</p>
+
+
+
 # NoBright
+
+
+
 
 > A lightweight Windows utility for complete and instant control over your screen's brightness.
 
 **NoBright** lets you dim your display to its minimum level with a configurable hotkey—perfect for late-night sessions—or set a precise level using the manual slider. It runs silently in your system tray, staying out of your way until you need it.
-
----
-
-
-
-<!-- ![NoBright Screenshot](https://i.imgur.com/CXl0KNql.png) -->
 
 ---
 
@@ -55,6 +58,10 @@ No fumbling, no menus, no complex shortcuts. Just simple, powerful brightness co
 *   Improve and refine the dark mode theme.
 *   Enhance the interface for better scaling and layout.
 *   Address minor bug fixes.
+
+---
+
+<img width="512" height="626" alt="Captura de pantalla 2025-11-07 015728" src="https://github.com/user-attachments/assets/23810492-6ee4-4f4f-a274-e82c1cb0855c" />
 
 ---
 
