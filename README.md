@@ -53,3 +53,8 @@ No fumbling, no menus, no complex shortcuts. Just simple, powerful brightness co
 *   Improve and refine the dark mode theme.
 *   Enhance the interface for better scaling and layout.
 *   Address minor bug fixes.
+
+---
+
+## License
+This project is licensed under the GNU GPL-3.0 License — see the LICENSE file for details.
