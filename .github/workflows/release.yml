@@ -1,16 +1,10 @@
 name: 'Create and Publish Release'
 
-#on:
-#  push:
-#    tags:
-#      - '*'
-#  workflow_dispatch:
-
 on:
   push:
-    branches: [ "main" ] # Se ejecuta cada vez que haces push a la rama 'main'
-  pull_request:
-    branches: [ "main" ] # También en pull requests a 'main'
+    tags:
+      - '*'
+  workflow_dispatch:
 
 permissions:
   contents: write
