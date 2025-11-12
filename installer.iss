@@ -11,8 +11,8 @@ CreateAppDir=yes
 AllowNoIcons=yes
 
 ; Detecta idioma del sistema y selecciona uno automáticamente
+; (NO usamos DefaultLanguage porque no es reconocido por la versión del compilador en el runner)
 LanguageDetectionMethod=uilanguage
-DefaultLanguage=english
 
 ; ===== IDIOMAS =====
 [Languages]
