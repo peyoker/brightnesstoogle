@@ -22,13 +22,207 @@ using System.Windows.Forms;
 using System.Drawing;
 using Microsoft.Win32;
 using System.Management;
+using System.Threading.Tasks;
 using System.Diagnostics;
+using System.Security.Principal;
 using System.Globalization;
-using System.Resources;
 
 namespace NoBright
 {
-    // Gestor de instancia única
+    // Ventana overlay oscura con opacidad ajustable
+    public class DarkOverlay : Form
+    {
+        [DllImport("user32.dll")]
+        static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        const uint SWP_NOACTIVATE = 0x0010;
+        const uint SWP_SHOWWINDOW = 0x0040;
+
+        public DarkOverlay()
+        {
+            this.FormBorderStyle = FormBorderStyle.None;
+            this.WindowState = FormWindowState.Maximized;
+            this.BackColor = Color.Black;
+            this.Opacity = 0.0;
+            this.ShowInTaskbar = false;
+            this.TopMost = true;
+            
+            int initialStyle = GetWindowLong(this.Handle, -20);
+            SetWindowLong(this.Handle, -20, initialStyle | 0x80000 | 0x20);
+            
+            Rectangle bounds = Screen.AllScreens[0].Bounds;
+            foreach (Screen screen in Screen.AllScreens)
+            {
+                bounds = Rectangle.Union(bounds, screen.Bounds);
+            }
+            this.Bounds = bounds;
+        }
+
+        [DllImport("user32.dll")]
+        static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll")]
+        static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        public void SetOpacitySafe(double opacity)
+        {
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action(() => this.Opacity = opacity));
+            }
+            else
+            {
+                this.Opacity = opacity;
+            }
+        }
+
+        public void ShowSafe()
+        {
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action(() => this.Show()));
+            }
+            else
+            {
+                this.Show();
+            }
+        }
+
+        public void HideSafe()
+        {
+            if (this.InvokeRequired)
+            {
+                this.Invoke(new Action(() => this.Hide()));
+            }
+            else
+            {
+                this.Hide();
+            }
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            SetWindowPos(this.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        }
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.ExStyle |= 0x80000;
+                cp.ExStyle |= 0x20;
+                return cp;
+            }
+        }
+    }
+
+    // Diálogo About
+    public class AboutForm : Form
+    {
+        public AboutForm(string[] texts, bool darkMode, Icon appIcon)
+        {
+            this.Text = texts[0]; // "About NoBright"
+            this.Size = new Size(450, 400);
+            this.FormBorderStyle = FormBorderStyle.FixedDialog;
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.Icon = appIcon;
+
+            // Aplicar tema
+            if (darkMode)
+            {
+                this.BackColor = Color.FromArgb(30, 30, 30);
+                this.ForeColor = Color.White;
+            }
+
+            int yPos = 20;
+
+            // Icono de la app
+            PictureBox icon = new PictureBox();
+            icon.Location = new Point(193, yPos);
+            icon.Size = new Size(64, 64);
+            if (appIcon != null)
+            {
+                icon.Image = appIcon.ToBitmap();
+            }
+            else
+            {
+                icon.Image = SystemIcons.Application.ToBitmap();
+            }
+            icon.SizeMode = PictureBoxSizeMode.StretchImage;
+            this.Controls.Add(icon);
+
+            yPos += 80;
+
+            // Nombre
+            Label lblName = new Label();
+            lblName.Text = "NoBright";
+            lblName.Font = new Font(lblName.Font.FontFamily, 16, FontStyle.Bold);
+            lblName.Location = new Point(0, yPos);
+            lblName.Size = new Size(450, 30);
+            lblName.TextAlign = ContentAlignment.MiddleCenter;
+            this.Controls.Add(lblName);
+
+            yPos += 35;
+
+            // Versión
+            Label lblVersion = new Label();
+            lblVersion.Text = "Version 1.2.0";
+            lblVersion.Location = new Point(0, yPos);
+            lblVersion.Size = new Size(450, 20);
+            lblVersion.TextAlign = ContentAlignment.MiddleCenter;
+            this.Controls.Add(lblVersion);
+
+            yPos += 30;
+
+            // Descripción
+            Label lblDesc = new Label();
+            lblDesc.Text = texts[1]; // Description
+            lblDesc.Location = new Point(25, yPos);
+            lblDesc.Size = new Size(400, 80);
+            lblDesc.TextAlign = ContentAlignment.TopCenter;
+            this.Controls.Add(lblDesc);
+
+            yPos += 90;
+
+            // Licencia
+            Label lblLicense = new Label();
+            lblLicense.Text = texts[2]; // "License: GPL-3.0"
+            lblLicense.Location = new Point(0, yPos);
+            lblLicense.Size = new Size(450, 20);
+            lblLicense.TextAlign = ContentAlignment.MiddleCenter;
+            this.Controls.Add(lblLicense);
+
+            yPos += 30;
+
+            // GitHub link
+            LinkLabel linkGitHub = new LinkLabel();
+            linkGitHub.Text = "https://github.com/peyoker/NoBright";
+            linkGitHub.Location = new Point(0, yPos);
+            linkGitHub.Size = new Size(450, 20);
+            linkGitHub.TextAlign = ContentAlignment.MiddleCenter;
+            linkGitHub.LinkColor = darkMode ? Color.LightBlue : Color.Blue;
+            linkGitHub.LinkClicked += (s, e) => {
+                Process.Start(new ProcessStartInfo("https://github.com/peyoker/NoBright") { UseShellExecute = true });
+            };
+            this.Controls.Add(linkGitHub);
+
+            yPos += 35;
+
+            // Botón cerrar
+            Button btnClose = new Button();
+            btnClose.Text = texts[3]; // "Close"
+            btnClose.Location = new Point(175, yPos);
+            btnClose.Size = new Size(100, 30);
+            btnClose.Click += (s, e) => this.Close();
+            this.Controls.Add(btnClose);
+        }
+    }
+
     public static class SingleInstance
     {
         private static Mutex mutex = null;
@@ -41,154 +235,305 @@ namespace NoBright
         }
     }
 
-    // Formulario principal de configuración
     public class ConfigForm : Form
     {
         private ComboBox cmbKey;
-        private ComboBox cmbLanguage;
         private NumericUpDown nudSeconds;
         private CheckBox chkStartup;
-        private CheckBox chkDarkMode;
         private Button btnSave;
         private Button btnTest;
         private Label lblKey;
         private Label lblSeconds;
-        private Label lblLanguage;
         private Label lblStatus;
-        private Label lblVersion;
-        private TextBox txtLog;
         private TrackBar trackBrightness;
         private Label lblBrightness;
-        private Label lblTheme;
+        private Panel pnlLog;
+        private TextBox txtLog;
+        private MenuStrip menuStrip;
+        private Icon appIcon;
 
-        private const string VERSION = "1.0.0";
+        private const string VERSION = "1.2.0";
+        private bool logExpanded = false;
 
-        // Textos en diferentes idiomas
         private string[] texts_en = new string[] {
             "NoBright - Settings",
             "Activation key:",
             "Hold duration (0 = instant):",
-            "Language:",
-            "Theme:",
-            "Dark mode",
             "Manual brightness control:",
             "Start with Windows",
             "Test Toggle",
             "Save",
-            "Event log:",
+            "✓ Saved",
+            "Language",
+            "English",
+            "Spanish",
+            "Theme",
+            "Light",
+            "Dark",
+            "Event Log",
+            "Show Event Log",
+            "Help",
+            "GitHub Repository",
+            "About",
             "Application started successfully",
             "Current brightness:",
             "Testing brightness toggle...",
             "Brightness state:",
-            "MINIMUM",
+            "DARK",
             "NORMAL",
             "Settings saved:",
-            "✓ Saved",
-            "Window minimized to tray",
-            "Brightness reduced to minimum (saved:",
-            "Brightness restored to",
-            "Error adjusting brightness:",
             "Brightness manually adjusted:",
             "Automatic startup enabled",
             "Automatic startup disabled",
-            "Error configuring startup:",
-            "WARNING: Cannot control brightness on this device"
+            "WARNING: Cannot control brightness on this device",
+            "Lock screen detected - switching to overlay mode",
+            "Session unlocked - switching to brightness mode",
+            "Smooth transition completed",
+            "Show Log",
+            "Hide Log",
+            // About dialog
+            "About NoBright",
+            "A lightweight Windows utility for instant screen brightness control—perfect for late-night sessions or sudden wake-ups. It runs silently in your system tray, staying out of your way until you need it.",
+            "License: GPL-3.0",
+            "Close"
         };
 
         private string[] texts_es = new string[] {
             "NoBright - Configuración",
             "Tecla de activación:",
             "Duración de pulsación (0 = instantáneo):",
-            "Idioma:",
-            "Tema:",
-            "Modo oscuro",
             "Control manual de brillo:",
             "Iniciar con Windows",
             "Probar Toggle",
             "Guardar",
-            "Registro de eventos:",
+            "✓ Guardado",
+            "Idioma",
+            "Inglés",
+            "Español",
+            "Tema",
+            "Claro",
+            "Oscuro",
+            "Registro de Eventos",
+            "Mostrar Registro de Eventos",
+            "Ayuda",
+            "Repositorio GitHub",
+            "Acerca de",
             "Aplicación iniciada correctamente",
             "Brillo actual:",
             "Probando toggle de brillo...",
             "Estado del brillo:",
-            "MÍNIMO",
+            "OSCURO",
             "NORMAL",
             "Configuración guardada:",
-            "✓ Guardado",
-            "Ventana minimizada a la bandeja",
-            "Brillo reducido al mínimo (guardado:",
-            "Brillo restaurado a",
-            "Error ajustando brillo:",
             "Brillo ajustado manualmente:",
             "Inicio automático activado",
             "Inicio automático desactivado",
-            "Error configurando inicio:",
-            "ADVERTENCIA: No se puede controlar el brillo en este equipo"
+            "ADVERTENCIA: No se puede controlar el brillo en este equipo",
+            "Pantalla bloqueada detectada - cambiando a modo overlay",
+            "Sesión desbloqueada - cambiando a modo brillo",
+            "Transición suave completada",
+            "Mostrar Registro",
+            "Ocultar Registro",
+            // About dialog
+            "Acerca de NoBright",
+            "Una utilidad ligera de Windows para control instantáneo del brillo—perfecta para sesiones nocturnas o despertares repentinos. Se ejecuta silenciosamente en la bandeja del sistema, sin molestar hasta que la necesites.",
+            "Licencia: GPL-3.0",
+            "Cerrar"
         };
 
         public string[] currentTexts;
 
         public ConfigForm()
         {
-            // Cargar idioma
+            // Cargar icono
+            try
+            {
+                appIcon = new Icon("icon.ico");
+            }
+            catch
+            {
+                try
+                {
+                    appIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                }
+                catch
+                {
+                    appIcon = SystemIcons.Application;
+                }
+            }
+
+            // Determinar idioma por defecto (sistema o inglés)
+            if (Properties.Settings.Default.Language == -1)
+            {
+                string systemLang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+                Properties.Settings.Default.Language = systemLang == "es" ? 1 : 0;
+                Properties.Settings.Default.Save();
+            }
+
             int lang = Properties.Settings.Default.Language;
             currentTexts = lang == 0 ? texts_en : texts_es;
             
             InitializeComponent();
+            CreateMenuStrip();
             LoadSettings();
             ApplyTheme(Properties.Settings.Default.DarkMode);
             
-            LogMessage(currentTexts[11]); // "Application started successfully"
-            
-            if (Program.CanControlBrightness())
+            if (Properties.Settings.Default.EventLogEnabled)
+            {
+                LogMessage(currentTexts[19]);
+                
+                if (Program.CanControlBrightness())
+                {
+                    int current = Program.GetCurrentBrightness();
+                    LogMessage($"{currentTexts[20]} {current}%");
+                    trackBrightness.Value = current;
+                }
+                else
+                {
+                    LogMessage(currentTexts[29]);
+                }
+            }
+            else if (Program.CanControlBrightness())
             {
                 int current = Program.GetCurrentBrightness();
-                LogMessage($"{currentTexts[12]} {current}%"); // "Current brightness: X%"
                 trackBrightness.Value = current;
             }
+        }
+
+        private void CreateMenuStrip()
+        {
+            menuStrip = new MenuStrip();
+
+            // Menú Idioma
+            ToolStripMenuItem langMenu = new ToolStripMenuItem(currentTexts[8]);
+            ToolStripMenuItem langEN = new ToolStripMenuItem(currentTexts[9]);
+            ToolStripMenuItem langES = new ToolStripMenuItem(currentTexts[10]);
+            
+            // Marcar idioma actual
+            if (Properties.Settings.Default.Language == 0)
+                langEN.Checked = true;
             else
+                langES.Checked = true;
+            
+            langEN.Click += (s, e) => ChangeLanguage(0);
+            langES.Click += (s, e) => ChangeLanguage(1);
+            
+            langMenu.DropDownItems.Add(langEN);
+            langMenu.DropDownItems.Add(langES);
+
+            // Menú Tema
+            ToolStripMenuItem themeMenu = new ToolStripMenuItem(currentTexts[11]);
+            ToolStripMenuItem themeLight = new ToolStripMenuItem(currentTexts[12]);
+            ToolStripMenuItem themeDark = new ToolStripMenuItem(currentTexts[13]);
+            
+            // Marcar tema actual
+            if (Properties.Settings.Default.DarkMode)
+                themeDark.Checked = true;
+            else
+                themeLight.Checked = true;
+            
+            themeLight.Click += (s, e) => {
+                Properties.Settings.Default.DarkMode = false;
+                Properties.Settings.Default.Save();
+                ApplyTheme(false);
+                themeLight.Checked = true;
+                themeDark.Checked = false;
+            };
+            themeDark.Click += (s, e) => {
+                Properties.Settings.Default.DarkMode = true;
+                Properties.Settings.Default.Save();
+                ApplyTheme(true);
+                themeDark.Checked = true;
+                themeLight.Checked = false;
+            };
+            
+            themeMenu.DropDownItems.Add(themeLight);
+            themeMenu.DropDownItems.Add(themeDark);
+
+            // Menú Registro - ahora funciona como toggle
+            ToolStripMenuItem logMenu = new ToolStripMenuItem(currentTexts[14]);
+            ToolStripMenuItem logToggle = new ToolStripMenuItem(currentTexts[15]);
+            logToggle.CheckOnClick = true;
+            logToggle.Checked = logExpanded;
+            logToggle.Click += (s, e) => {
+                BtnToggleLog_Click(s, e);
+                logToggle.Checked = logExpanded;
+                
+                // Habilitar el log cuando se muestra
+                if (logExpanded && !Properties.Settings.Default.EventLogEnabled)
+                {
+                    Properties.Settings.Default.EventLogEnabled = true;
+                    Properties.Settings.Default.Save();
+                }
+            };
+            logMenu.DropDownItems.Add(logToggle);
+
+            // Menú Ayuda
+            ToolStripMenuItem helpMenu = new ToolStripMenuItem(currentTexts[16]);
+            ToolStripMenuItem helpGitHub = new ToolStripMenuItem(currentTexts[17]);
+            ToolStripMenuItem helpAbout = new ToolStripMenuItem(currentTexts[18]);
+            
+            helpGitHub.Click += (s, e) => {
+                Process.Start(new ProcessStartInfo("https://github.com/peyoker/NoBright") { UseShellExecute = true });
+            };
+            helpAbout.Click += (s, e) => {
+                AboutForm about = new AboutForm(
+                    new string[] { currentTexts[35], currentTexts[36], currentTexts[37], currentTexts[38] },
+                    Properties.Settings.Default.DarkMode,
+                    appIcon
+                );
+                about.ShowDialog();
+            };
+            
+            helpMenu.DropDownItems.Add(helpGitHub);
+            helpMenu.DropDownItems.Add(helpAbout);
+
+            menuStrip.Items.Add(langMenu);
+            menuStrip.Items.Add(themeMenu);
+            menuStrip.Items.Add(logMenu);
+            menuStrip.Items.Add(helpMenu);
+
+            this.MainMenuStrip = menuStrip;
+            this.Controls.Add(menuStrip);
+        }
+
+        private void ChangeLanguage(int langIndex)
+        {
+            if (Properties.Settings.Default.Language != langIndex)
             {
-                LogMessage(currentTexts[27]); // "WARNING: Cannot control..."
-                btnTest.Enabled = false;
+                Properties.Settings.Default.Language = langIndex;
+                Properties.Settings.Default.Save();
+                
+                MessageBox.Show(
+                    langIndex == 0 
+                        ? "Language changed to English. Please restart the application." 
+                        : "Idioma cambiado a Español. Por favor reinicia la aplicación.",
+                    "NoBright",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                );
             }
         }
 
         private void InitializeComponent()
         {
-            this.Text = currentTexts[0]; // "NoBright - Settings"
-            this.Size = new Size(450, 550);
+            this.Text = currentTexts[0];
+            this.Size = new Size(450, 380);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.StartPosition = FormStartPosition.CenterScreen;
+            this.Icon = appIcon;
 
-            int yPos = 20;
-
-            // Idioma
-            lblLanguage = new Label();
-            lblLanguage.Text = currentTexts[3]; // "Language:"
-            lblLanguage.Location = new Point(20, yPos);
-            lblLanguage.Size = new Size(150, 20);
-            this.Controls.Add(lblLanguage);
-
-            cmbLanguage = new ComboBox();
-            cmbLanguage.DropDownStyle = ComboBoxStyle.DropDownList;
-            cmbLanguage.Location = new Point(20, yPos + 25);
-            cmbLanguage.Size = new Size(180, 25);
-            cmbLanguage.Items.AddRange(new object[] { "English", "Español" });
-            cmbLanguage.SelectedIndexChanged += CmbLanguage_SelectedIndexChanged;
-            this.Controls.Add(cmbLanguage);
-
-            yPos += 60;
+            int yPos = 50;
 
             // Label tecla
             lblKey = new Label();
-            lblKey.Text = currentTexts[1]; // "Activation key:"
+            lblKey.Text = currentTexts[1];
             lblKey.Location = new Point(20, yPos);
             lblKey.Size = new Size(400, 20);
             this.Controls.Add(lblKey);
 
-            // ComboBox teclas
             cmbKey = new ComboBox();
             cmbKey.DropDownStyle = ComboBoxStyle.DropDownList;
             cmbKey.Location = new Point(20, yPos + 25);
@@ -197,6 +542,12 @@ namespace NoBright
                 "Left Control", "Right Control",
                 "Left Alt", "Right Alt",
                 "Left Shift", "Right Shift",
+                "Escape",
+                "Arrow Up", "Arrow Down", "Arrow Left", "Arrow Right",
+                "Left Windows", "Right Windows",
+                "Pause/Break",
+                "Scroll Lock",
+                "Print Screen",
                 "F1", "F2", "F3", "F4", "F5", "F6",
                 "F7", "F8", "F9", "F10", "F11", "F12"
             });
@@ -204,14 +555,12 @@ namespace NoBright
 
             yPos += 60;
 
-            // Label segundos
             lblSeconds = new Label();
-            lblSeconds.Text = currentTexts[2]; // "Hold duration..."
+            lblSeconds.Text = currentTexts[2];
             lblSeconds.Location = new Point(20, yPos);
             lblSeconds.Size = new Size(350, 20);
             this.Controls.Add(lblSeconds);
 
-            // NumericUpDown segundos
             nudSeconds = new NumericUpDown();
             nudSeconds.Location = new Point(20, yPos + 25);
             nudSeconds.Size = new Size(100, 25);
@@ -223,25 +572,8 @@ namespace NoBright
 
             yPos += 60;
 
-            // Tema
-            lblTheme = new Label();
-            lblTheme.Text = currentTexts[4]; // "Theme:"
-            lblTheme.Location = new Point(20, yPos);
-            lblTheme.Size = new Size(150, 20);
-            this.Controls.Add(lblTheme);
-
-            chkDarkMode = new CheckBox();
-            chkDarkMode.Text = currentTexts[5]; // "Dark mode"
-            chkDarkMode.Location = new Point(20, yPos + 25);
-            chkDarkMode.Size = new Size(200, 20);
-            chkDarkMode.CheckedChanged += ChkDarkMode_CheckedChanged;
-            this.Controls.Add(chkDarkMode);
-
-            yPos += 55;
-
-            // Control manual de brillo
             Label lblManual = new Label();
-            lblManual.Text = currentTexts[6]; // "Manual brightness control:"
+            lblManual.Text = currentTexts[3];
             lblManual.Location = new Point(20, yPos);
             lblManual.Size = new Size(250, 20);
             this.Controls.Add(lblManual);
@@ -265,25 +597,23 @@ namespace NoBright
 
             yPos += 75;
 
-            // CheckBox inicio con Windows
             chkStartup = new CheckBox();
-            chkStartup.Text = currentTexts[7]; // "Start with Windows"
+            chkStartup.Text = currentTexts[4];
             chkStartup.Location = new Point(20, yPos);
             chkStartup.Size = new Size(200, 20);
             this.Controls.Add(chkStartup);
 
             yPos += 35;
 
-            // Botones
             btnTest = new Button();
-            btnTest.Text = currentTexts[8]; // "Test Toggle"
+            btnTest.Text = currentTexts[5];
             btnTest.Location = new Point(20, yPos);
             btnTest.Size = new Size(125, 30);
             btnTest.Click += BtnTest_Click;
             this.Controls.Add(btnTest);
 
             btnSave = new Button();
-            btnSave.Text = currentTexts[9]; // "Save"
+            btnSave.Text = currentTexts[6];
             btnSave.Location = new Point(160, yPos);
             btnSave.Size = new Size(125, 30);
             btnSave.Click += BtnSave_Click;
@@ -296,10 +626,10 @@ namespace NoBright
             lblStatus.ForeColor = Color.Green;
             this.Controls.Add(lblStatus);
 
-            yPos += 40;
+            yPos += 35;
 
-            // Versión
-            lblVersion = new Label();
+            // Versión pequeña en la esquina
+            Label lblVersion = new Label();
             lblVersion.Text = $"v{VERSION}";
             lblVersion.Location = new Point(370, yPos);
             lblVersion.Size = new Size(50, 15);
@@ -308,63 +638,90 @@ namespace NoBright
             lblVersion.TextAlign = ContentAlignment.MiddleRight;
             this.Controls.Add(lblVersion);
 
-            yPos += 10;
-
-            // TextBox log
-            Label lblLog = new Label();
-            lblLog.Text = currentTexts[10]; // "Event log:"
-            lblLog.Location = new Point(20, yPos);
-            lblLog.Size = new Size(150, 20);
-            this.Controls.Add(lblLog);
+            // Panel de log (inicialmente oculto)
+            pnlLog = new Panel();
+            pnlLog.Location = new Point(20, yPos + 5);
+            pnlLog.Size = new Size(400, 150);
+            pnlLog.Visible = false;
 
             txtLog = new TextBox();
             txtLog.Multiline = true;
             txtLog.ScrollBars = ScrollBars.Vertical;
-            txtLog.Location = new Point(20, yPos + 25);
-            txtLog.Size = new Size(400, 100);
+            txtLog.Dock = DockStyle.Fill;
             txtLog.ReadOnly = true;
-            this.Controls.Add(txtLog);
+            pnlLog.Controls.Add(txtLog);
+
+            this.Controls.Add(pnlLog);
 
             this.FormClosing += ConfigForm_FormClosing;
         }
 
-        private void CmbLanguage_SelectedIndexChanged(object sender, EventArgs e)
+        private void BtnToggleLog_Click(object sender, EventArgs e)
         {
-            Properties.Settings.Default.Language = cmbLanguage.SelectedIndex;
-            Properties.Settings.Default.Save();
+            logExpanded = !logExpanded;
+            pnlLog.Visible = logExpanded;
             
-            MessageBox.Show(
-                cmbLanguage.SelectedIndex == 0 
-                    ? "Language changed. Please restart the application." 
-                    : "Idioma cambiado. Por favor reinicia la aplicación.",
-                "NoBright",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information
-            );
-        }
-
-        private void ChkDarkMode_CheckedChanged(object sender, EventArgs e)
-        {
-            ApplyTheme(chkDarkMode.Checked);
+            if (logExpanded)
+            {
+                this.Height = 550;
+            }
+            else
+            {
+                this.Height = 380;
+            }
         }
 
         private void ApplyTheme(bool darkMode)
         {
+            Color backColor, foreColor, logBackColor, logForeColor, menuBackColor, menuForeColor;
+
             if (darkMode)
             {
-                // Tema oscuro
-                this.BackColor = Color.FromArgb(30, 30, 30);
-                this.ForeColor = Color.White;
-                txtLog.BackColor = Color.FromArgb(45, 45, 45);
-                txtLog.ForeColor = Color.White;
+                backColor = Color.FromArgb(30, 30, 30);
+                foreColor = Color.White;
+                logBackColor = Color.FromArgb(45, 45, 45);
+                logForeColor = Color.White;
+                menuBackColor = Color.FromArgb(45, 45, 45);
+                menuForeColor = Color.White;
             }
             else
             {
-                // Tema claro
-                this.BackColor = SystemColors.Control;
-                this.ForeColor = SystemColors.ControlText;
-                txtLog.BackColor = Color.White;
-                txtLog.ForeColor = Color.Black;
+                backColor = SystemColors.Control;
+                foreColor = SystemColors.ControlText;
+                logBackColor = Color.White;
+                logForeColor = Color.Black;
+                menuBackColor = SystemColors.Control;
+                menuForeColor = SystemColors.ControlText;
+            }
+
+            this.BackColor = backColor;
+            this.ForeColor = foreColor;
+            txtLog.BackColor = logBackColor;
+            txtLog.ForeColor = logForeColor;
+
+            // Actualizar menú con colores oscuros
+            if (menuStrip != null)
+            {
+                menuStrip.BackColor = menuBackColor;
+                menuStrip.ForeColor = menuForeColor;
+                
+                // Aplicar a todos los items del menú
+                foreach (ToolStripMenuItem item in menuStrip.Items)
+                {
+                    item.BackColor = menuBackColor;
+                    item.ForeColor = menuForeColor;
+                    
+                    // Aplicar a subitems
+                    foreach (ToolStripItem subItem in item.DropDownItems)
+                    {
+                        subItem.BackColor = menuBackColor;
+                        subItem.ForeColor = menuForeColor;
+                    }
+                    
+                    // Aplicar al dropdown
+                    item.DropDown.BackColor = menuBackColor;
+                    item.DropDown.ForeColor = menuForeColor;
+                }
             }
         }
 
@@ -372,7 +729,7 @@ namespace NoBright
         {
             lblBrightness.Text = $"{trackBrightness.Value}%";
             Program.SetBrightness(trackBrightness.Value);
-            LogMessage($"{currentTexts[23]} {trackBrightness.Value}%"); // "Brightness manually adjusted: X%"
+            LogMessage($"{currentTexts[26]} {trackBrightness.Value}%");
         }
 
         public void LogMessage(string message)
@@ -392,25 +749,22 @@ namespace NoBright
             {
                 e.Cancel = true;
                 this.Hide();
-                LogMessage(currentTexts[19]); // "Window minimized to tray"
             }
         }
 
         private void LoadSettings()
         {
-            cmbLanguage.SelectedIndex = Properties.Settings.Default.Language;
             cmbKey.SelectedIndex = Math.Max(0, Math.Min(Properties.Settings.Default.KeyIndex, cmbKey.Items.Count - 1));
             nudSeconds.Value = (decimal)Properties.Settings.Default.HoldSeconds;
             chkStartup.Checked = IsInStartup();
-            chkDarkMode.Checked = Properties.Settings.Default.DarkMode;
         }
 
         private void BtnTest_Click(object sender, EventArgs e)
         {
-            LogMessage(currentTexts[13]); // "Testing brightness toggle..."
+            LogMessage(currentTexts[21]);
             Program.ToggleBrightness();
-            string state = Program.brightnessIsLow ? currentTexts[15] : currentTexts[16]; // "MINIMUM" : "NORMAL"
-            LogMessage($"{currentTexts[14]} {state}"); // "Brightness state: X"
+            string state = Program.brightnessIsLow ? currentTexts[23] : currentTexts[24];
+            LogMessage($"{currentTexts[22]} {state}");
             
             int current = Program.GetCurrentBrightness();
             if (trackBrightness.Value != current)
@@ -423,13 +777,12 @@ namespace NoBright
         {
             Properties.Settings.Default.KeyIndex = cmbKey.SelectedIndex;
             Properties.Settings.Default.HoldSeconds = (double)nudSeconds.Value;
-            Properties.Settings.Default.DarkMode = chkDarkMode.Checked;
             Properties.Settings.Default.Save();
 
             SetStartup(chkStartup.Checked);
 
-            lblStatus.Text = currentTexts[18]; // "✓ Saved"
-            LogMessage($"{currentTexts[17]} {cmbKey.Text}, {nudSeconds.Value}s"); // "Settings saved: X, Ys"
+            lblStatus.Text = currentTexts[7];
+            LogMessage($"{currentTexts[25]} {cmbKey.Text}, {nudSeconds.Value}s");
             
             System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
             timer.Interval = 2000;
@@ -455,17 +808,17 @@ namespace NoBright
                 if (enable)
                 {
                     key.SetValue("NoBright", "\"" + Application.ExecutablePath + "\"");
-                    LogMessage(currentTexts[24]); // "Automatic startup enabled"
+                    LogMessage(currentTexts[27]);
                 }
                 else
                 {
                     key.DeleteValue("NoBright", false);
-                    LogMessage(currentTexts[25]); // "Automatic startup disabled"
+                    LogMessage(currentTexts[28]);
                 }
             }
             catch (Exception ex)
             {
-                LogMessage($"{currentTexts[26]} {ex.Message}"); // "Error configuring startup: X"
+                LogMessage($"Error: {ex.Message}");
             }
         }
     }
@@ -475,14 +828,179 @@ namespace NoBright
         [DllImport("user32.dll")]
         public static extern short GetAsyncKeyState(int vKey);
 
+        [DllImport("user32.dll")]
+        static extern short GetKeyState(int nVirtKey);
+
+        // Usar múltiples métodos de detección para mayor fiabilidad
+        [DllImport("user32.dll", SetLastError = true)]
+        static extern uint GetRawInputData(IntPtr hRawInput, uint uiCommand, out RAWINPUT pData, ref uint pcbSize, uint cbSizeHeader);
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct RAWINPUT
+        {
+            public RAWINPUTHEADER header;
+            public RAWINPUTDATA data;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct RAWINPUTHEADER
+        {
+            public uint dwType;
+            public uint dwSize;
+            public IntPtr hDevice;
+            public IntPtr wParam;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        struct RAWINPUTDATA
+        {
+            [FieldOffset(0)]
+            public RAWMOUSE mouse;
+            [FieldOffset(0)]
+            public RAWKEYBOARD keyboard;
+            [FieldOffset(0)]
+            public RAWHID hid;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct RAWKEYBOARD
+        {
+            public ushort MakeCode;
+            public ushort Flags;
+            public ushort Reserved;
+            public ushort VKey;
+            public uint Message;
+            public uint ExtraInformation;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct RAWMOUSE
+        {
+            public ushort usFlags;
+            public uint ulButtons;
+            public uint ulRawButtons;
+            public int lLastX;
+            public int lLastY;
+            public uint ulExtraInformation;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct RAWHID
+        {
+            public uint dwSizeHid;
+            public uint dwCount;
+        }
+
         public static bool brightnessIsLow = false;
         static int savedBrightness = 50;
         static NotifyIcon trayIcon;
         static ConfigForm configForm;
         static DateTime keyPressStart = DateTime.MinValue;
         static bool wasPressed = false;
+        static DarkOverlay overlay = null;
+        static bool checkingKey = true;
 
-        static int[] keyCodes = { 0xA2, 0xA3, 0xA4, 0xA5, 0xA0, 0xA1, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B };
+        static int[] keyCodes = { 0xA2, 0xA3, 0xA4, 0xA5, 0xA0, 0xA1, 0x1B, 0x26, 0x28, 0x25, 0x27, 0x5B, 0x5C, 0x13, 0x91, 0x2C, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B };
+
+        private static bool IsKeyPressed(int vKey)
+        {
+            // Usar GetAsyncKeyState que funciona a nivel más bajo
+            short keyState = GetAsyncKeyState(vKey);
+            bool isPressed = (keyState & 0x8000) != 0;
+            
+            // Doble verificación con GetKeyState para mayor fiabilidad
+            if (!isPressed)
+            {
+                short alternateState = GetKeyState(vKey);
+                isPressed = (alternateState & 0x8000) != 0;
+            }
+            
+            return isPressed;
+        }
+
+        private static void MonitorKeyPress()
+        {
+            Thread.CurrentThread.Priority = ThreadPriority.Highest;
+            
+            // Aumentar la frecuencia de polling a 10ms para mejor detección
+            const int POLL_INTERVAL = 10;
+            
+            while (checkingKey)
+            {
+                try
+                {
+                    int selectedKey = keyCodes[Math.Max(0, Math.Min(Properties.Settings.Default.KeyIndex, keyCodes.Length - 1))];
+                    double holdSeconds = Properties.Settings.Default.HoldSeconds;
+                    
+                    bool keyPressed = IsKeyPressed(selectedKey);
+
+                    if (keyPressed && !wasPressed)
+                    {
+                        wasPressed = true;
+                        keyPressStart = DateTime.Now;
+                        
+                        configForm?.LogMessage($"Key detected: {selectedKey:X}");
+                        
+                        if (holdSeconds == 0)
+                        {
+                            ToggleBrightness();
+                        }
+                    }
+                    else if (keyPressed && wasPressed && holdSeconds > 0)
+                    {
+                        TimeSpan elapsed = DateTime.Now - keyPressStart;
+                        if (elapsed.TotalSeconds >= holdSeconds && keyPressStart != DateTime.MaxValue)
+                        {
+                            ToggleBrightness();
+                            keyPressStart = DateTime.MaxValue;
+                        }
+                    }
+                    else if (!keyPressed && wasPressed)
+                    {
+                        wasPressed = false;
+                        keyPressStart = DateTime.MinValue;
+                    }
+
+                    Thread.Sleep(POLL_INTERVAL);
+                }
+                catch
+                {
+                    Thread.Sleep(100);
+                }
+            }
+        }
+
+        static bool IsRunAsAdmin()
+        {
+            WindowsIdentity identity = WindowsIdentity.GetCurrent();
+            WindowsPrincipal principal = new WindowsPrincipal(identity);
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+        }
+
+        static void RestartAsAdmin()
+        {
+            ProcessStartInfo startInfo = new ProcessStartInfo();
+            startInfo.UseShellExecute = true;
+            startInfo.WorkingDirectory = Environment.CurrentDirectory;
+            startInfo.FileName = Application.ExecutablePath;
+            startInfo.Verb = "runas";
+
+            try
+            {
+                Process.Start(startInfo);
+                Application.Exit();
+            }
+            catch
+            {
+                MessageBox.Show(
+                    "NoBright requires administrator privileges to control brightness.\nPlease run as administrator.",
+                    "Administrator Rights Required",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+                Application.Exit();
+            }
+        }
 
         public static bool CanControlBrightness()
         {
@@ -523,33 +1041,70 @@ namespace NoBright
                     break;
                 }
             }
-            catch (Exception ex)
-            {
-                configForm?.LogMessage($"Error: {ex.Message}");
-            }
+            catch { }
         }
 
-        public static void ToggleBrightness()
+        public static async void ToggleBrightness()
         {
             if (!brightnessIsLow)
             {
+                // Activar modo oscuro
                 savedBrightness = GetCurrentBrightness();
+                
+                // Intentar controlar brillo por WMI primero
                 SetBrightness(0);
+                await Task.Delay(200); // Esperar para verificar
+                
+                int checkBrightness = GetCurrentBrightness();
+                bool wmiWorked = (checkBrightness <= 10); // Si está cerca de 0, funcionó
+                
+                // Si WMI no funcionó, activar overlay (pantalla bloqueada o monitor no compatible)
+                if (!wmiWorked)
+                {
+                    configForm?.LogMessage("Hardware control unavailable, using overlay mode");
+                    if (overlay == null)
+                    {
+                        overlay = new DarkOverlay();
+                    }
+                    overlay.SetOpacitySafe(0.95);
+                    overlay.ShowSafe();
+                }
+                else
+                {
+                    configForm?.LogMessage("✓ Brightness reduced to minimum");
+                }
+                
                 brightnessIsLow = true;
-                configForm?.LogMessage($"✓ Brightness reduced to minimum (saved: {savedBrightness}%)");
             }
             else
             {
+                // Restaurar modo normal
+                
+                // Si el overlay está visible, ocultarlo
+                if (overlay != null && overlay.Visible)
+                {
+                    overlay.HideSafe();
+                    configForm?.LogMessage("✓ Overlay removed");
+                }
+                
+                // Restaurar brillo WMI
                 SetBrightness(savedBrightness);
-                brightnessIsLow = false;
                 configForm?.LogMessage($"✓ Brightness restored to {savedBrightness}%");
+                
+                brightnessIsLow = false;
             }
         }
 
         [STAThread]
         static void Main()
         {
-            // Verificar instancia única
+            // Verificar permisos de administrador
+            if (!IsRunAsAdmin())
+            {
+                RestartAsAdmin();
+                return;
+            }
+
             if (!SingleInstance.IsFirstInstance())
             {
                 MessageBox.Show(
@@ -567,7 +1122,6 @@ namespace NoBright
             configForm = new ConfigForm();
 
             trayIcon = new NotifyIcon();
-            // Intentar cargar icono personalizado, si no existe usar el por defecto
             try
             {
                 trayIcon.Icon = new Icon("icon.ico");
@@ -605,59 +1159,22 @@ namespace NoBright
                 configForm.BringToFront();
             };
 
-            if (CanControlBrightness())
-            {
-                trayIcon.ShowBalloonTip(2000, "NoBright", 
-                    "Application started.\nRight click icon to configure.", 
-                    ToolTipIcon.Info);
-            }
+            trayIcon.ShowBalloonTip(2000, "NoBright", 
+                "Application started.\nWorks everywhere, even on lock screen!", 
+                ToolTipIcon.Info);
 
             configForm.Show();
 
+            // Iniciar monitoreo de teclas con alta prioridad
             Thread monitorThread = new Thread(MonitorKeyPress);
             monitorThread.IsBackground = true;
+            monitorThread.Priority = ThreadPriority.Highest;
             monitorThread.Start();
 
             Application.Run();
-        }
-
-        static void MonitorKeyPress()
-        {
-            while (true)
-            {
-                try
-                {
-                    int selectedKey = keyCodes[Math.Max(0, Math.Min(Properties.Settings.Default.KeyIndex, keyCodes.Length - 1))];
-                    double holdSeconds = Properties.Settings.Default.HoldSeconds;
-                    bool keyPressed = (GetAsyncKeyState(selectedKey) & 0x8000) != 0;
-
-                    if (keyPressed && !wasPressed)
-                    {
-                        wasPressed = true;
-                        keyPressStart = DateTime.Now;
-                        if (holdSeconds == 0)
-                        {
-                            ToggleBrightness();
-                        }
-                    }
-                    else if (keyPressed && wasPressed && holdSeconds > 0)
-                    {
-                        TimeSpan elapsed = DateTime.Now - keyPressStart;
-                        if (elapsed.TotalSeconds >= holdSeconds && keyPressStart != DateTime.MaxValue)
-                        {
-                            ToggleBrightness();
-                            keyPressStart = DateTime.MaxValue;
-                        }
-                    }
-                    else if (!keyPressed && wasPressed)
-                    {
-                        wasPressed = false;
-                        keyPressStart = DateTime.MinValue;
-                    }
-                    Thread.Sleep(50);
-                }
-                catch { Thread.Sleep(1000); }
-            }
+            
+            // Detener monitoreo al salir
+            checkingKey = false;
         }
     }
 }
@@ -686,7 +1203,7 @@ namespace NoBright.Properties
         }
 
         [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        [global::System.Configuration.DefaultSettingValueAttribute("-1")]
         public int Language
         {
             get { return ((int)(this["Language"])); }
@@ -694,12 +1211,19 @@ namespace NoBright.Properties
         }
 
         [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("false")]
+        [global::System.Configuration.DefaultSettingValueAttribute("true")]
         public bool DarkMode
         {
             get { return ((bool)(this["DarkMode"])); }
             set { this["DarkMode"] = value; }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("false")]
+        public bool EventLogEnabled
+        {
+            get { return ((bool)(this["EventLogEnabled"])); }
+            set { this["EventLogEnabled"] = value; }
+        }
     }
 }
-
