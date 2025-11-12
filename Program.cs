@@ -1225,5 +1225,15 @@ namespace NoBright.Properties
             get { return ((bool)(this["EventLogEnabled"])); }
             set { this["EventLogEnabled"] = value; }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("true")]
+        public bool DoubleTapEnabled
+        {
+            get { return ((bool)(this["DoubleTapEnabled"])); }
+            set { this["DoubleTapEnabled"] = value; }
+        }
     }
 }
+}
+
