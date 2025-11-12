@@ -37,16 +37,17 @@ jobs:
         run: choco install innosetup --no-progress -y
         shell: pwsh
 
-      # 6. Genera el instalador
+      # 6. Genera el instalador con Inno Setup
       - name: Build Installer
         run: |
-          # Inject version into installer file
+          # Sustituir la versión en el archivo ISS
           (Get-Content installer.iss) -replace '{#Version}', '${{ github.ref_name }}' | Set-Content installer-build.iss
 
-          # Compile with Inno Setup
+          # Compilar el instalador
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer-build.iss"
-          $outPath = Join-Path $PWD "Output\NoBright-installer.exe"
 
+          # Comprobar si se generó correctamente
+          $outPath = Join-Path $PWD "Output\NoBright-installer.exe"
           if (-not (Test-Path $outPath)) {
             Write-Host "ERROR: installer not found at $outPath"
             Write-Host "=== Output folder listing ==="
@@ -60,18 +61,20 @@ jobs:
             exit 1
           }
 
-          # Move the generated installer to repo root
+          # Mover el instalador al directorio raíz
           Move-Item $outPath -Destination (Join-Path $PWD "NoBright-installer.exe")
         shell: pwsh
 
-      # 7. Empaqueta el ejecutable y el instalador
+      # 7. Empaqueta ejecutable y el instalador
       - name: Package Release
         run: Compress-Archive -Path ./publish/*, ./NoBright-installer.exe -DestinationPath NoBright-${{ github.ref_name }}.zip
         shell: pwsh
 
-      # 8. Crea el Release en GitHub y sube el ZIP
+      # 8. Crea el Release en GitHub y sube el ZIP + el instalador
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: NoBright-${{ github.ref_name }}.zip
-          generate_release_n
+          files: |
+            NoBright-${{ github.ref_name }}.zip
+            NoBright-installer.exe
+          generate_release_notes: true
