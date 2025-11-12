@@ -1,21 +1,25 @@
       - name: Build Installer
         run: |
-          # inject version into installer file
+          # Inject version into installer file
           (Get-Content installer.iss) -replace '{#Version}', '${{ github.ref_name }}' | Set-Content installer-build.iss
 
-          # compile with Inno Setup
+          # Compile with Inno Setup
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer-build.iss"
           $outPath = Join-Path $PWD "Output\NoBright-installer.exe"
 
           if (-not (Test-Path $outPath)) {
             Write-Host "ERROR: installer not found at $outPath"
             Write-Host "=== Output folder listing ==="
-            if (Test-Path "Output") { Get-ChildItem -Path "Output" -Recurse | ForEach-Object { Write-Host $_.FullName } } else { Write-Host "Output folder does not exist." }
+            if (Test-Path "Output") {
+              Get-ChildItem -Path "Output" -Recurse | ForEach-Object { Write-Host $_.FullName }
+            } else {
+              Write-Host "Output folder does not exist."
+            }
             Write-Host "=== Current directory listing (publish) ==="
             Get-ChildItem -Path "./publish" -Recurse | ForEach-Object { Write-Host $_.FullName }
             exit 1
           }
 
-          # move the generated installer to repo root
+          # Move the generated installer to repo root
           Move-Item $outPath -Destination (Join-Path $PWD "NoBright-installer.exe")
         shell: pwsh
